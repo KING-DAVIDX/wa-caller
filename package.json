@@ -1,0 +1,57 @@
+{
+  "name": "wa-caller",
+  "version": "0.1.0",
+  "description": "Fast, low-overhead WhatsApp voice calls for Baileys: outgoing calls, auto-answer and audio playback.",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "example": "node examples/basic.js"
+  },
+  "peerDependencies": {
+    "@whiskeysockets/baileys": ">=7.0.0-rc.9",
+    "ffmpeg-static": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@whiskeysockets/baileys": {
+      "optional": true
+    },
+    "ffmpeg-static": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "voip",
+    "voice-call",
+    "auto-answer",
+    "wasm",
+    "opus"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KING-DAVIDX/wa-caller.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KING-DAVIDX/wa-caller/issues"
+  },
+  "homepage": "https://github.com/KING-DAVIDX/wa-caller#readme"
+}
