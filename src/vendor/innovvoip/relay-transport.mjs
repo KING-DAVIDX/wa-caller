@@ -94,6 +94,26 @@ const formatIceCredential = (val, fallback, minLen = 4) => {
     str = str.replace(/[^a-zA-Z0-9+/=_-]/g, "");
     return str.length >= minLen ? str : fallback;
 };
+const hasCredentialValue = (val) => {
+    if (val == null) return false;
+    if (typeof val === "string") return val.trim().length > 0;
+    if (Buffer.isBuffer(val) || val instanceof Uint8Array) return val.byteLength > 0;
+    return true;
+};
+const credentialLength = (val) => {
+    if (val == null) return 0;
+    if (Buffer.isBuffer(val) || val instanceof Uint8Array) return val.byteLength;
+    return String(val).length;
+};
+export const mergeRelayInfo = (existingInfo, endpointInfo) => ({
+    ...endpointInfo,
+    relayId: existingInfo?.relayId ?? endpointInfo.relayId ?? 0,
+    token: hasCredentialValue(existingInfo?.token) ? existingInfo.token : endpointInfo.token,
+    authToken: hasCredentialValue(existingInfo?.authToken) ? existingInfo.authToken : endpointInfo.authToken,
+    key: hasCredentialValue(existingInfo?.key) ? existingInfo.key : endpointInfo.key,
+    name: endpointInfo.name || existingInfo?.name || `${endpointInfo.ip}:${endpointInfo.port}`,
+    enableEdgerayDtlsActiveMode: existingInfo?.enableEdgerayDtlsActiveMode ?? endpointInfo.enableEdgerayDtlsActiveMode ?? false,
+});
 const replaceIceCredentials = (sdp, ufrag, pwd) => {
     const offerCreds = extractOfferIceCredentials(sdp);
     const safeUfrag = formatIceCredential(ufrag, offerCreds.ufrag, 4);
@@ -254,14 +274,23 @@ export class RelayRtcTransport {
                     }
                 }
             }
-            for (const id of this.#relayInfoById.keys()) {
+            for (const id of [...this.#relayInfoById.keys()]) {
                 if (!nextInfoById.has(id))
                     this.#closeConnection(id);
             }
+            this.#relayInfoById.clear();
             for (const [id, info] of nextInfoById) {
                 this.#relayInfoById.set(id, info);
             }
             const uniqueInfos = new Set(nextInfoById.values());
+            voipDiagnostics.log({
+                level: "debug",
+                component: "RelayTransport",
+                event: "relay_list_applied",
+                direction: "internal",
+                callId: this.callId,
+                data: { relayCount: uniqueInfos.size, infoCount: nextInfoById.size }
+            });
             for (const info of uniqueInfos) {
                 void this.#ensureConnection(info);
             }
@@ -319,9 +348,10 @@ export class RelayRtcTransport {
             if (!ep.ip || !ep.port) continue;
             const clientPort = (USE_ORIGINAL_RELAY_PORTS && ep.port < 10000) ? ep.port : TRUE_WEB_CLIENT_RELAY_PORT;
             const id = getConnectionIdentifier(ep.ip, clientPort);
+            const existingInfo = this.#relayInfoById.get(id) ?? this.#connections.get(id)?.info;
 
             let token = undefined;
-            if (ep.token) {
+            if (hasCredentialValue(ep.token)) {
                 if (Buffer.isBuffer(ep.token) || ep.token instanceof Uint8Array) {
                     token = ep.token;
                 } else if (typeof ep.token === "string") {
@@ -330,7 +360,7 @@ export class RelayRtcTransport {
             }
 
             let authToken = undefined;
-            if (ep.authToken) {
+            if (hasCredentialValue(ep.authToken)) {
                 if (Buffer.isBuffer(ep.authToken) || ep.authToken instanceof Uint8Array) {
                     authToken = ep.authToken;
                 } else if (typeof ep.authToken === "string") {
@@ -339,7 +369,7 @@ export class RelayRtcTransport {
             }
 
             let key = undefined;
-            if (ep.key) {
+            if (hasCredentialValue(ep.key)) {
                 if (Buffer.isBuffer(ep.key) || ep.key instanceof Uint8Array) {
                     key = ep.key;
                 } else if (typeof ep.key === "string") {
@@ -356,7 +386,7 @@ export class RelayRtcTransport {
                 }
             }
 
-            const info = {
+            const info = mergeRelayInfo(existingInfo, {
                 id,
                 relayId: ep.relayId ?? 0,
                 ip: ep.ip,
@@ -368,7 +398,7 @@ export class RelayRtcTransport {
                 key,
                 name: ep.relayName || `${ep.ip}:${clientPort}`,
                 enableEdgerayDtlsActiveMode: false,
-            };
+            });
             nextInfoById.set(id, info);
             if (ep.port !== clientPort) {
                 nextInfoById.set(getConnectionIdentifier(ep.ip, ep.port), info);
@@ -603,6 +633,22 @@ export class RelayRtcTransport {
             if (connection.state === "closed" || connection.state === "failed" || pc.signalingState === "closed") {
                 return;
             }
+            voipDiagnostics.log({
+                level: "debug",
+                component: "RelayTransport",
+                event: "relay_ice_material",
+                direction: "internal",
+                callId: this.callId,
+                data: {
+                    id: connection.info.id,
+                    relayId: connection.info.relayId ?? 0,
+                    tLen: credentialLength(connection.info.token),
+                    aLen: credentialLength(connection.info.authToken),
+                    kLen: credentialLength(connection.info.key),
+                    activeMode: connection.info.enableEdgerayDtlsActiveMode === true,
+                    port: getRtcConnectPort(connection.info)
+                }
+            });
             const remoteSdp = buildRemoteRelayAnswer(offer.sdp ?? "", {
                 ...connection.info,
                 port: getRtcConnectPort(connection.info),

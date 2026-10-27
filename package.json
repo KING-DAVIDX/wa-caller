@@ -24,6 +24,9 @@
     "test": "node --test test/*.test.js",
     "example": "node examples/basic.js"
   },
+  "dependencies": {
+    "@roamhq/wrtc": "^0.10.0"
+  },
   "peerDependencies": {
     "@whiskeysockets/baileys": ">=7.0.0-rc.9",
     "ffmpeg-static": ">=5.0.0"
