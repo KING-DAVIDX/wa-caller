@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -121,4 +122,31 @@ test("own call tracking is case-insensitive", () => {
   caller._ownCallIds.add("ABCDEF");
   assert.equal(caller.isOwnCallEvent("abcdef"), true);
   assert.equal(caller.isOwnCallEvent("nope"), false);
+});
+
+test("call() ignores a stale active call that has already ended", async () => {
+  const caller = new WaCaller({ audioCacheFile: null });
+  caller.ready = true;
+  caller.activeCall = { callId: "OLD", ended: true };
+  const nextCall = { callId: "NEW", once() {} };
+  caller.client = { call: async () => nextCall };
+
+  const call = await caller.call("2348000000000");
+  assert.equal(call, nextCall);
+  assert.equal(caller.activeCall, nextCall);
+});
+
+test("call_ended clears the active auto-answered session", async () => {
+  const caller = new WaCaller({ audioCacheFile: null, rejectUnhandled: false });
+  const client = new EventEmitter();
+  caller.client = client;
+  caller._wire(client);
+
+  const session = { callId: "CALL1", ended: false, peerJid: "2348000000000@s.whatsapp.net" };
+  client.emit("call_incoming", session);
+  assert.equal(caller.activeCall, session);
+
+  client.emit("call_ended", session, "completed");
+  assert.equal(caller.activeCall, null);
+  assert.equal(caller.incomingCall, null);
 });

@@ -315,6 +315,7 @@ export class CallManager extends EventEmitter {
      * call locally while the caller's phone keeps the call alive.
      */
     #onSessionEnded = (session, reason) => {
+        this.emit("call_ended", session, reason);
         if (!session._endSignalSent && !session._peerInitiatedEnd) {
             this.#ensureTerminateSent(session, reason);
             setTimeout(() => {

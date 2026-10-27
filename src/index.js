@@ -210,7 +210,11 @@ export class WaCaller extends EventEmitter {
 
     try {
       const accepted = await session.accept({ ...plan, ...baseOptions, durationMs });
-      this.activeCall = accepted || session;
+      const acceptedSession = accepted || session;
+      this.activeCall = acceptedSession;
+      acceptedSession.once?.("ended", () => {
+        if (this.activeCall?.callId === acceptedSession.callId) this.activeCall = null;
+      });
     } catch (error) {
       this._report(error);
     }
@@ -292,6 +296,7 @@ export class WaCaller extends EventEmitter {
   /** Place an outgoing voice call. */
   async call(phoneNumber, options = {}) {
     if (!this.ready || !this.client) throw new Error("Caller is not attached to a WhatsApp socket");
+    if (this.activeCall?.ended) this.activeCall = null;
     if (this.activeCall) throw new Error("A call is already active");
     const target = String(phoneNumber || "").trim();
     if (!target) throw new Error("A phone number or JID is required");
